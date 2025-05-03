@@ -36,12 +36,38 @@ const Journal = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  const [aiAnalysisResults, setAiAnalysisResults] = useState<{
+    sentimentScore: number;
+    detectedMood: MoodType;
+    topics: string[];
+    keywords: string[];
+  } | null>(null);
   
   const currentDate = format(new Date(), 'yyyy-MM-dd');
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !content) return;
+    
+    // Ensure we have analysis results
+    let analysis = aiAnalysisResults;
+    if (!analysis && content) {
+      setAnalyzing(true);
+      try {
+        const result = await analyzeText(content);
+        analysis = {
+          sentimentScore: result.sentimentScore,
+          detectedMood: result.mood,
+          topics: result.topics,
+          keywords: result.keywords
+        };
+        setAiAnalysisResults(analysis);
+      } catch (error) {
+        console.error('Failed to analyze content:', error);
+      } finally {
+        setAnalyzing(false);
+      }
+    }
     
     addEntry({
       date: currentDate,
@@ -52,6 +78,7 @@ const Journal = () => {
         score: selectedMoodScore,
       },
       tags,
+      aiAnalysis: analysis || undefined
     });
     
     // Reset form
@@ -61,6 +88,7 @@ const Journal = () => {
     setSelectedMoodScore(0.5);
     setTags([]);
     setTagInput('');
+    setAiAnalysisResults(null);
   };
   
   const handleAnalyze = async () => {
@@ -69,8 +97,17 @@ const Journal = () => {
     setAnalyzing(true);
     try {
       const analysis = await analyzeText(content);
+      
       setSelectedMood(analysis.mood);
       setSelectedMoodScore(analysis.score);
+      
+      setAiAnalysisResults({
+        sentimentScore: analysis.sentimentScore,
+        detectedMood: analysis.mood,
+        topics: analysis.topics,
+        keywords: analysis.keywords
+      });
+      
     } finally {
       setAnalyzing(false);
     }
@@ -100,8 +137,20 @@ const Journal = () => {
           <h1 className="text-3xl font-bold tracking-tight">Journal</h1>
           <p className="text-muted-foreground">{format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
         </div>
-        <Button onClick={handleSubmit} disabled={!title || !content} className="bg-primary hover:bg-primary/90">
-          <PenLine className="mr-2 h-4 w-4" /> Save Entry
+        <Button 
+          onClick={handleSubmit} 
+          disabled={!title || !content || analyzing} 
+          className="bg-primary hover:bg-primary/90"
+        >
+          {analyzing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing
+            </>
+          ) : (
+            <>
+              <PenLine className="mr-2 h-4 w-4" /> Save Entry
+            </>
+          )}
         </Button>
       </div>
       
@@ -187,20 +236,37 @@ const Journal = () => {
                     </Button>
                   </div>
                   
-                  {selectedMood && !analyzing && (
-                    <div className="flex items-center mt-4 ml-2">
-                      <div className={`text-4xl p-2 rounded-full ${selectedMood !== 'neutral' ? moodColors[selectedMood] : ''}`}>
-                        {moodEmojis[selectedMood]}
+                  {selectedMood && !analyzing && aiAnalysisResults && (
+                    <div className="space-y-4 mt-2">
+                      <div className="flex items-center">
+                        <div className={`text-4xl p-2 rounded-full ${selectedMood !== 'neutral' ? moodColors[selectedMood] : ''}`}>
+                          {moodEmojis[selectedMood]}
+                        </div>
+                        <div className="ml-4">
+                          <h4 className="font-semibold capitalize">{selectedMood}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            Intensity: {Math.round(selectedMoodScore * 100)}%
+                          </p>
+                        </div>
                       </div>
-                      <div className="ml-4">
-                        <h4 className="font-semibold capitalize">{selectedMood}</h4>
-                        <p className="text-sm text-muted-foreground">
-                          Intensity: {Math.round(selectedMoodScore * 100)}%
-                        </p>
+                      
+                      <div className="bg-accent/30 rounded-md p-3 space-y-2">
+                        <h4 className="text-sm font-medium">AI Analysis</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Detected Topics:</p>
+                            <p className="text-sm">{aiAnalysisResults.topics.join(', ')}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground">Keywords:</p>
+                            <p className="text-sm">{aiAnalysisResults.keywords.join(', ')}</p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
                 </TabsContent>
+                
                 <TabsContent value="manual" className="space-y-4 pt-4">
                   <div>
                     <h3 className="font-medium">How are you feeling?</h3>

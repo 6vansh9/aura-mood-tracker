@@ -10,7 +10,13 @@ type JournalContextType = {
   deleteEntry: (id: string) => void;
   getEntryById: (id: string) => JournalEntry | undefined;
   getEntriesByDate: (date: string) => JournalEntry[];
-  analyzeText: (text: string) => Promise<{ mood: MoodType; score: number }>;
+  analyzeText: (text: string) => Promise<{ 
+    mood: MoodType; 
+    score: number; 
+    sentimentScore: number;
+    topics: string[];
+    keywords: string[];
+  }>;
 };
 
 const JournalContext = createContext<JournalContextType | undefined>(undefined);
@@ -23,8 +29,14 @@ export const useJournal = () => {
   return context;
 };
 
-// Simple sentiment analysis function (mock for now)
-const analyzeSentiment = async (text: string): Promise<{ mood: MoodType; score: number }> => {
+// Enhanced sentiment analysis function
+const analyzeSentiment = async (text: string): Promise<{ 
+  mood: MoodType; 
+  score: number;
+  sentimentScore: number;
+  topics: string[];
+  keywords: string[];
+}> => {
   // This would be replaced with actual sentiment analysis using a library or API
   const text_lower = text.toLowerCase();
   
@@ -67,13 +79,79 @@ const analyzeSentiment = async (text: string): Promise<{ mood: MoodType; score: 
   
   // If all scores are low, return neutral
   if (highestScore.score <= 0.2) {
-    return { mood: 'neutral' as MoodType, score: 0.5 };
+    return { 
+      mood: 'neutral' as MoodType, 
+      score: 0.5,
+      sentimentScore: 0.5,
+      topics: ['general'],
+      keywords: extractKeywords(text)
+    };
   }
   
   // Normalize the score to be between 0 and 1
   const normalizedScore = Math.min(highestScore.score / 3, 1);
   
-  return { mood: highestScore.mood, score: normalizedScore };
+  // Calculate overall sentiment score (simplified)
+  const sentimentScore = normalizedScore;
+  
+  // Extract topics and keywords from text
+  const topics = extractTopics(text);
+  const keywords = extractKeywords(text);
+  
+  return { 
+    mood: highestScore.mood, 
+    score: normalizedScore,
+    sentimentScore,
+    topics,
+    keywords 
+  };
+};
+
+// Simple topic extraction function
+const extractTopics = (text: string): string[] => {
+  // This is a simplified implementation
+  const topicKeywords: Record<string, string[]> = {
+    'work': ['job', 'office', 'work', 'career', 'meeting', 'project'],
+    'health': ['exercise', 'workout', 'health', 'run', 'gym', 'fitness'],
+    'relationships': ['friend', 'family', 'partner', 'date', 'conversation'],
+    'personal growth': ['learn', 'goal', 'improve', 'progress', 'habit'],
+    'relaxation': ['rest', 'sleep', 'relax', 'break', 'vacation', 'weekend']
+  };
+  
+  const textLower = text.toLowerCase();
+  const foundTopics: string[] = [];
+  
+  Object.entries(topicKeywords).forEach(([topic, keywords]) => {
+    if (keywords.some(keyword => textLower.includes(keyword))) {
+      foundTopics.push(topic);
+    }
+  });
+  
+  return foundTopics.length > 0 ? foundTopics : ['general'];
+};
+
+// Extract keywords from text
+const extractKeywords = (text: string): string[] => {
+  // This is a simplified implementation
+  const words = text.toLowerCase().split(/\W+/);
+  const commonWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'with', 'by', 'about', 'as', 'i', 'my', 'me', 'mine', 'you', 'your', 'yours', 'we', 'our', 'us', 'they', 'their', 'them', 'it', 'its', 'this', 'that', 'these', 'those', 'is', 'am', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'shall', 'should', 'may', 'might', 'must', 'can', 'could'];
+  
+  // Filter out common words and short words
+  const significantWords = words.filter(word => 
+    !commonWords.includes(word) && word.length > 3
+  );
+  
+  // Count word occurrences
+  const wordCount: Record<string, number> = {};
+  significantWords.forEach(word => {
+    wordCount[word] = (wordCount[word] || 0) + 1;
+  });
+  
+  // Sort by frequency and take top 5
+  return Object.entries(wordCount)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([word]) => word);
 };
 
 export const JournalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -121,7 +199,13 @@ export const JournalProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return entries.filter(entry => entry.date.startsWith(date));
   };
 
-  const analyzeText = async (text: string): Promise<{ mood: MoodType; score: number }> => {
+  const analyzeText = async (text: string): Promise<{ 
+    mood: MoodType; 
+    score: number;
+    sentimentScore: number;
+    topics: string[];
+    keywords: string[];
+  }> => {
     try {
       return await analyzeSentiment(text);
     } catch (error) {
@@ -131,7 +215,13 @@ export const JournalProvider: React.FC<{ children: React.ReactNode }> = ({ child
         description: "Could not analyze your text. Using neutral sentiment instead.",
         variant: "destructive",
       });
-      return { mood: 'neutral' as MoodType, score: 0.5 };
+      return { 
+        mood: 'neutral' as MoodType, 
+        score: 0.5,
+        sentimentScore: 0.5,
+        topics: ['general'],
+        keywords: []
+      };
     }
   };
 

@@ -145,8 +145,24 @@ const EntryDetail = () => {
               <div>
                 <h3 className="text-sm font-medium mb-2">AI Insights</h3>
                 <div className="bg-accent/50 p-4 rounded-md">
-                  <p className="text-sm mb-2"><span className="font-medium">Detected Topics:</span> {entry.aiAnalysis.topics.join(', ')}</p>
-                  <p className="text-sm"><span className="font-medium">Keywords:</span> {entry.aiAnalysis.keywords.join(', ')}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm mb-2">
+                        <span className="font-medium">Detected Mood:</span> 
+                        <span className="capitalize ml-2">{entry.aiAnalysis.detectedMood}</span>
+                      </p>
+                      <p className="text-sm mb-2">
+                        <span className="font-medium">Sentiment Score:</span> 
+                        <span className="ml-2">{Math.round(entry.aiAnalysis.sentimentScore * 100)}%</span>
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm mb-1"><span className="font-medium">Detected Topics:</span></p>
+                      <p className="text-sm mb-3">{entry.aiAnalysis.topics.join(', ')}</p>
+                      <p className="text-sm mb-1"><span className="font-medium">Keywords:</span></p>
+                      <p className="text-sm">{entry.aiAnalysis.keywords.join(', ')}</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             </>
