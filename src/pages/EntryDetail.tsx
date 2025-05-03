@@ -11,7 +11,7 @@ import { ChevronLeft, Trash2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { MoodType } from '@/types';
 
-const moodEmojis = {
+const moodEmojis: Record<MoodType, string> = {
   joy: "😊",
   sadness: "😢",
   anger: "😠",
@@ -19,7 +19,7 @@ const moodEmojis = {
   neutral: "😐"
 };
 
-const moodColors = {
+const moodColors: Record<MoodType, string> = {
   joy: "bg-mood-joy text-black",
   sadness: "bg-mood-sadness text-white",
   anger: "bg-mood-anger text-white",

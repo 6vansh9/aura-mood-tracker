@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { format, parseISO } from 'date-fns';
 import { useJournal } from '@/contexts/JournalContext';
-import { MoodType, JournalEntry } from '@/types';
+import { MoodType, JournalEntry, MOOD_TYPES } from '@/types';
 import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -64,7 +64,8 @@ const Calendar = () => {
   };
   
   const modifiersStyles = {
-    ...Object.values(MoodType).reduce<Record<string, React.CSSProperties>>((acc, mood) => {
+    ...Object.values(MOOD_TYPES).reduce<Record<string, React.CSSProperties>>((acc, _, index) => {
+      const mood = Object.keys(MOOD_TYPES)[index] as MoodType;
       acc[`has-entry-${mood}`] = {
         backgroundColor: mood === 'joy' ? '#FFD700' : 
                         mood === 'sadness' ? '#6495ED' : 

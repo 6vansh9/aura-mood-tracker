@@ -1,6 +1,14 @@
 
 export type MoodType = "joy" | "sadness" | "anger" | "fear" | "neutral";
 
+export const MOOD_TYPES: Record<MoodType, string> = {
+  joy: "Joy",
+  sadness: "Sadness",
+  anger: "Anger",
+  fear: "Fear",
+  neutral: "Neutral"
+};
+
 export interface JournalEntry {
   id: string;
   date: string;

@@ -67,7 +67,7 @@ const analyzeSentiment = async (text: string): Promise<{ mood: MoodType; score: 
   
   // If all scores are low, return neutral
   if (highestScore.score <= 0.2) {
-    return { mood: 'neutral', score: 0.5 };
+    return { mood: 'neutral' as MoodType, score: 0.5 };
   }
   
   // Normalize the score to be between 0 and 1
@@ -121,7 +121,7 @@ export const JournalProvider: React.FC<{ children: React.ReactNode }> = ({ child
     return entries.filter(entry => entry.date.startsWith(date));
   };
 
-  const analyzeText = async (text: string) => {
+  const analyzeText = async (text: string): Promise<{ mood: MoodType; score: number }> => {
     try {
       return await analyzeSentiment(text);
     } catch (error) {
@@ -131,11 +131,11 @@ export const JournalProvider: React.FC<{ children: React.ReactNode }> = ({ child
         description: "Could not analyze your text. Using neutral sentiment instead.",
         variant: "destructive",
       });
-      return { mood: 'neutral', score: 0.5 };
+      return { mood: 'neutral' as MoodType, score: 0.5 };
     }
   };
 
-  const value = {
+  const value: JournalContextType = {
     entries,
     addEntry,
     updateEntry,
