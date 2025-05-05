@@ -1,39 +1,66 @@
-
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from '@/contexts/AuthContext';
 import { JournalProvider } from '@/contexts/JournalContext';
-import Layout from "@/components/Layout";
-import Journal from "@/pages/Journal";
-import Calendar from "@/pages/Calendar";
-import Analytics from "@/pages/Analytics";
-import EntryDetail from "@/pages/EntryDetail";
-import NotFound from "@/pages/NotFound";
+import { SettingsProvider } from '@/contexts/SettingsContext';
+import { ThemeProvider } from '@/contexts/ThemeContext';
+import { Toaster } from '@/components/ui/toaster';
+import MainLayout from '@/components/layout/MainLayout';
+import Login from '@/pages/Login';
+import Signup from '@/pages/Signup';
+import Dashboard from '@/pages/Dashboard';
+import Journal from '@/pages/Journal';
+import JournalHistory from '@/pages/JournalHistory';
+import Analytics from '@/pages/Analytics';
+import Settings from '@/pages/Settings';
+import { useAuth } from '@/contexts/AuthContext';
 
-const queryClient = new QueryClient();
+const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
+  const { user, loading } = useAuth();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <JournalProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Journal />} />
-              <Route path="/calendar" element={<Calendar />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/entry/:id" element={<EntryDetail />} />
-            </Route>
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </JournalProvider>
-  </QueryClientProvider>
-);
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
+
+  return <>{children}</>;
+};
+
+const App = () => {
+  return (
+    <Router>
+      <ThemeProvider>
+        <AuthProvider>
+          <SettingsProvider>
+            <JournalProvider>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/signup" element={<Signup />} />
+                <Route
+                  path="/"
+                  element={
+                    <PrivateRoute>
+                      <MainLayout />
+                    </PrivateRoute>
+                  }
+                >
+                  <Route index element={<Navigate to="/dashboard" replace />} />
+                  <Route path="dashboard" element={<Dashboard />} />
+                  <Route path="journal" element={<Journal />} />
+                  <Route path="journal/history" element={<JournalHistory />} />
+                  <Route path="analytics" element={<Analytics />} />
+                  <Route path="settings" element={<Settings />} />
+                </Route>
+              </Routes>
+              <Toaster />
+            </JournalProvider>
+          </SettingsProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </Router>
+  );
+};
 
 export default App;

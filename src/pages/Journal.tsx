@@ -1,311 +1,399 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { useJournal } from '@/contexts/JournalContext';
+import { useMoodAnalysis } from '@/hooks/useMoodAnalysis';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { format } from 'date-fns';
-import { PenLine, Smile, Frown, Angry, Loader2 } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { PenLine, Smile, Frown, Meh, Loader2, Calendar, Image as ImageIcon, Bold, Italic, List, X } from 'lucide-react';
 import { MoodType } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { useEditor } from '@/hooks/useEditor';
+import { JournalEntry } from '@/types';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
-const moodEmojis = {
-  joy: "😊",
-  sadness: "😢",
-  anger: "😠",
-  fear: "😨",
-  neutral: "😐"
-};
-
-const moodColors = {
-  joy: "bg-mood-joy text-black",
-  sadness: "bg-mood-sadness text-white",
-  anger: "bg-mood-anger text-white",
-  fear: "bg-mood-fear text-white",
-  neutral: "bg-mood-neutral text-black"
-};
+const moods = [
+  { value: 'positive', label: 'Positive', icon: Smile },
+  { value: 'neutral', label: 'Neutral', icon: Meh },
+  { value: 'negative', label: 'Negative', icon: Frown },
+];
 
 const Journal = () => {
-  const { addEntry, analyzeText } = useJournal();
+  const { addEntry } = useJournal();
+  const { analyzeText, isAnalyzing, result, resetAnalysis } = useMoodAnalysis();
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
   const [selectedMood, setSelectedMood] = useState<MoodType>('neutral');
-  const [selectedMoodScore, setSelectedMoodScore] = useState(0.5);
-  const [analyzing, setAnalyzing] = useState(false);
+  const [moodScore, setMoodScore] = useState<number | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
-  const [aiAnalysisResults, setAiAnalysisResults] = useState<{
-    sentimentScore: number;
-    detectedMood: MoodType;
-    topics: string[];
-    keywords: string[];
-  } | null>(null);
-  
-  const currentDate = format(new Date(), 'yyyy-MM-dd');
-  
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [category, setCategory] = useState<string>('personal');
+  const [images, setImages] = useState<string[]>([]);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  const {
+    content,
+    selection,
+    handleChange,
+    handleSelectionChange,
+    insertText,
+    formatText,
+    addLink,
+    addImage,
+    getContent,
+    setContent,
+    toggleBlockType,
+    toggleInlineStyle,
+    handleKeyCommand
+  } = useEditor();
+
+  useEffect(() => {
+    if (!title) {
+      setTitle(format(selectedDate, 'MMMM d, yyyy'));
+    }
+  }, [selectedDate]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title || !content) return;
-    
+
     // Ensure we have analysis results
-    let analysis = aiAnalysisResults;
-    if (!analysis && content) {
-      setAnalyzing(true);
-      try {
-        const result = await analyzeText(content);
-        analysis = {
-          sentimentScore: result.sentimentScore,
-          detectedMood: result.mood,
-          topics: result.topics,
-          keywords: result.keywords
-        };
-        setAiAnalysisResults(analysis);
-      } catch (error) {
-        console.error('Failed to analyze content:', error);
-      } finally {
-        setAnalyzing(false);
-      }
+    if (!result) {
+      await analyzeText(content);
     }
-    
-    addEntry({
-      date: currentDate,
+
+    const newEntry: JournalEntry = {
+      id: Date.now().toString(),
       title,
       content,
-      mood: {
-        type: selectedMood,
-        score: selectedMoodScore,
-      },
+      mood: selectedMood || (result?.mood || 'neutral'),
+      moodScore: moodScore || (result?.score || 0),
       tags,
-      aiAnalysis: analysis || undefined
-    });
-    
-    // Reset form
+      createdAt: selectedDate.toISOString(),
+      updatedAt: new Date().toISOString(),
+      isFavorite,
+      category,
+      images
+    };
+
+    addEntry(newEntry);
+    resetForm();
+  };
+
+  const handleAnalyze = async () => {
+    if (content) {
+      await analyzeText(content);
+      if (result) {
+        setSelectedMood(result.mood as MoodType);
+        setMoodScore(result.score);
+      }
+    }
+  };
+
+  const handleTagKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && tagInput.trim()) {
+      e.preventDefault();
+      if (!tags.includes(tagInput.trim())) {
+        setTags([...tags, tagInput.trim()]);
+      }
+      setTagInput('');
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setTags(tags.filter(tag => tag !== tagToRemove));
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const imageUrl = reader.result as string;
+          setImages(prev => [...prev, imageUrl]);
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+  };
+
+  const removeImage = (index: number) => {
+    setImages(images.filter((_, i) => i !== index));
+    if (selectedImage === images[index]) {
+      setSelectedImage(null);
+    }
+  };
+
+  const resetForm = () => {
     setTitle('');
     setContent('');
     setSelectedMood('neutral');
-    setSelectedMoodScore(0.5);
+    setMoodScore(null);
     setTags([]);
     setTagInput('');
-    setAiAnalysisResults(null);
-  };
-  
-  const handleAnalyze = async () => {
-    if (!content) return;
-    
-    setAnalyzing(true);
-    try {
-      const analysis = await analyzeText(content);
-      
-      setSelectedMood(analysis.mood);
-      setSelectedMoodScore(analysis.score);
-      
-      setAiAnalysisResults({
-        sentimentScore: analysis.sentimentScore,
-        detectedMood: analysis.mood,
-        topics: analysis.topics,
-        keywords: analysis.keywords
-      });
-      
-    } finally {
-      setAnalyzing(false);
-    }
-  };
-  
-  const handleAddTag = () => {
-    if (!tagInput.trim() || tags.includes(tagInput.trim())) return;
-    setTags([...tags, tagInput.trim()]);
-    setTagInput('');
-  };
-  
-  const handleRemoveTag = (tag: string) => {
-    setTags(tags.filter(t => t !== tag));
+    setSelectedDate(new Date());
+    setIsFavorite(false);
+    setCategory('personal');
+    setImages([]);
+    setSelectedImage(null);
+    resetAnalysis();
   };
 
-  useEffect(() => {
-    // Set a default title based on the current date if no title yet
-    if (!title) {
-      setTitle(`Journal Entry - ${format(new Date(), 'MMMM d, yyyy')}`);
+  const handleFormatClick = (e: React.MouseEvent, format: 'bold' | 'italic' | 'list') => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    switch (format) {
+      case 'bold':
+        formatText('bold');
+        break;
+      case 'italic':
+        formatText('italic');
+        break;
+      case 'list':
+        toggleBlockType('unordered-list-item');
+        break;
     }
-  }, [title]);
-  
+  };
+
   return (
-    <div className="container max-w-4xl py-6 px-4 md:px-6 space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Journal</h1>
-          <p className="text-muted-foreground">{format(new Date(), 'EEEE, MMMM d, yyyy')}</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">New Journal Entry</h1>
+        <div className="flex items-center space-x-2">
+          <input
+            type="date"
+            value={format(selectedDate, 'yyyy-MM-dd')}
+            onChange={(e) => setSelectedDate(new Date(e.target.value))}
+            className="rounded-md border border-input bg-background px-3 py-2"
+          />
+          <Button
+            variant={isFavorite ? "default" : "outline"}
+            size="icon"
+            onClick={() => setIsFavorite(!isFavorite)}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill={isFavorite ? "currentColor" : "none"}
+              stroke="currentColor"
+              className="h-4 w-4"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+              />
+            </svg>
+          </Button>
         </div>
-        <Button 
-          onClick={handleSubmit} 
-          disabled={!title || !content || analyzing} 
-          className="bg-primary hover:bg-primary/90"
-        >
-          {analyzing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processing
-            </>
-          ) : (
-            <>
-              <PenLine className="mr-2 h-4 w-4" /> Save Entry
-            </>
-          )}
-        </Button>
       </div>
-      
-      <Card className="shadow-md">
-        <CardContent className="p-6">
-          <form className="space-y-4">
-            <div>
-              <Input 
-                placeholder="Title of your entry" 
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="text-lg font-medium"
+
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Entry Details</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Input
+              placeholder="Title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full rounded-md border border-input bg-background px-3 py-2"
+            >
+              <option value="personal">Personal</option>
+              <option value="work">Work</option>
+              <option value="health">Health</option>
+              <option value="relationships">Relationships</option>
+              <option value="other">Other</option>
+            </select>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Content</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center space-x-2 border-b pb-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => document.getElementById('image-upload')?.click()}
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Add Image</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <input
+                id="image-upload"
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={handleImageUpload}
               />
             </div>
-            
-            <Textarea
-              placeholder="Write about your day, thoughts, or feelings..."
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="journal-editor min-h-[250px]"
-            />
-            
-            <div className="flex flex-wrap gap-2 mt-2">
-              {tags.map((tag) => (
-                <Badge 
-                  key={tag} 
-                  variant="secondary"
-                  className="cursor-pointer"
-                  onClick={() => handleRemoveTag(tag)}
-                >
-                  {tag} &times;
-                </Badge>
-              ))}
-              
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Add a tag"
-                  value={tagInput}
-                  onChange={(e) => setTagInput(e.target.value)}
-                  className="w-32"
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAddTag();
-                    }
-                  }}
-                />
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  onClick={handleAddTag}
-                  className="shrink-0"
-                >
-                  Add
-                </Button>
+            <div className="relative">
+              <textarea
+                className="min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2"
+                value={content}
+                onChange={(e) => handleChange(e.target.value)}
+                onSelect={(e) => {
+                  const target = e.target as HTMLTextAreaElement;
+                  handleSelectionChange(target.selectionStart, target.selectionEnd);
+                }}
+                onKeyDown={handleKeyCommand}
+                placeholder="Write your thoughts here..."
+              />
+              {images.length > 0 && (
+                <div className="mt-4 grid grid-cols-3 gap-4">
+                  {images.map((image, index) => (
+                    <div key={index} className="relative group">
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <div 
+                            className="cursor-pointer"
+                            onClick={() => setSelectedImage(image)}
+                          >
+                            <img
+                              src={image}
+                              alt={`Uploaded ${index + 1}`}
+                              className="w-full h-32 object-cover rounded-md hover:opacity-90 transition-opacity"
+                            />
+                          </div>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-4xl">
+                          <div className="relative">
+                            <img
+                              src={image}
+                              alt={`Preview ${index + 1}`}
+                              className="w-full h-auto rounded-lg"
+                            />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute top-2 right-2"
+                              onClick={() => removeImage(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Mood & Tags</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center space-x-4">
+              <div className="flex-1">
+                <div className="flex items-center space-x-2">
+                  <Button
+                    type="button"
+                    variant={selectedMood === 'positive' ? 'default' : 'outline'}
+                    onClick={() => setSelectedMood('positive')}
+                  >
+                    <Smile className="h-4 w-4 mr-2" />
+                    Positive
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={selectedMood === 'neutral' ? 'default' : 'outline'}
+                    onClick={() => setSelectedMood('neutral')}
+                  >
+                    <Meh className="h-4 w-4 mr-2" />
+                    Neutral
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={selectedMood === 'negative' ? 'default' : 'outline'}
+                    onClick={() => setSelectedMood('negative')}
+                  >
+                    <Frown className="h-4 w-4 mr-2" />
+                    Negative
+                  </Button>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAnalyze}
+                disabled={isAnalyzing}
+              >
+                {isAnalyzing ? 'Analyzing...' : 'Analyze Mood'}
+              </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Input
+                placeholder="Add tags (press Enter)"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+              />
+              <div className="flex flex-wrap gap-2">
+                {tags.map(tag => (
+                  <Badge key={tag} variant="secondary">
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => removeTag(tag)}
+                      className="ml-1 hover:text-destructive"
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                ))}
               </div>
             </div>
-            
-            <div className="border-t pt-4">
-              <Tabs defaultValue="ai" className="w-full">
-                <TabsList className="w-full grid grid-cols-2">
-                  <TabsTrigger value="ai" className="text-sm">AI Detection</TabsTrigger>
-                  <TabsTrigger value="manual" className="text-sm">Manual Selection</TabsTrigger>
-                </TabsList>
-                <TabsContent value="ai" className="space-y-4 pt-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-medium">AI Mood Analysis</h3>
-                      <p className="text-sm text-muted-foreground">Based on your journal content</p>
-                    </div>
-                    <Button 
-                      onClick={handleAnalyze} 
-                      variant="secondary" 
-                      disabled={!content || analyzing}
-                    >
-                      {analyzing ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing
-                        </>
-                      ) : (
-                        "Analyze Text"
-                      )}
-                    </Button>
-                  </div>
-                  
-                  {selectedMood && !analyzing && aiAnalysisResults && (
-                    <div className="space-y-4 mt-2">
-                      <div className="flex items-center">
-                        <div className={`text-4xl p-2 rounded-full ${selectedMood !== 'neutral' ? moodColors[selectedMood] : ''}`}>
-                          {moodEmojis[selectedMood]}
-                        </div>
-                        <div className="ml-4">
-                          <h4 className="font-semibold capitalize">{selectedMood}</h4>
-                          <p className="text-sm text-muted-foreground">
-                            Intensity: {Math.round(selectedMoodScore * 100)}%
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-accent/30 rounded-md p-3 space-y-2">
-                        <h4 className="text-sm font-medium">AI Analysis</h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Detected Topics:</p>
-                            <p className="text-sm">{aiAnalysisResults.topics.join(', ')}</p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">Keywords:</p>
-                            <p className="text-sm">{aiAnalysisResults.keywords.join(', ')}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </TabsContent>
-                
-                <TabsContent value="manual" className="space-y-4 pt-4">
-                  <div>
-                    <h3 className="font-medium">How are you feeling?</h3>
-                    <p className="text-sm text-muted-foreground">Select your mood</p>
-                  </div>
-                  
-                  <div className="grid grid-cols-5 gap-3">
-                    {Object.entries(moodEmojis).map(([mood, emoji]) => (
-                      <Button
-                        key={mood}
-                        type="button"
-                        variant="outline"
-                        className={`flex flex-col items-center h-16 ${selectedMood === mood ? 'border-primary border-2' : ''}`}
-                        onClick={() => setSelectedMood(mood as MoodType)}
-                      >
-                        <span className="text-2xl">{emoji}</span>
-                        <span className="text-xs mt-1 capitalize">{mood}</span>
-                      </Button>
-                    ))}
-                  </div>
-                  
-                  <div>
-                    <label className="text-sm font-medium">Intensity: {Math.round(selectedMoodScore * 100)}%</label>
-                    <input
-                      type="range"
-                      min="0.1"
-                      max="1"
-                      step="0.1"
-                      value={selectedMoodScore}
-                      onChange={(e) => setSelectedMoodScore(parseFloat(e.target.value))}
-                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                    />
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end space-x-4">
+          <Button type="button" variant="outline" onClick={resetForm}>
+            Reset
+          </Button>
+          <Button type="submit">Save Entry</Button>
+        </div>
+      </form>
     </div>
   );
 };

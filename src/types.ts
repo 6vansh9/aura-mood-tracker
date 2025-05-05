@@ -1,34 +1,52 @@
-
-export type MoodType = "joy" | "sadness" | "anger" | "fear" | "neutral";
-
-export const MOOD_TYPES: Record<MoodType, string> = {
-  joy: "Joy",
-  sadness: "Sadness",
-  anger: "Anger",
-  fear: "Fear",
-  neutral: "Neutral"
-};
+export type MoodType = 'positive' | 'neutral' | 'negative';
 
 export interface JournalEntry {
   id: string;
-  date: string;
   title: string;
   content: string;
-  mood: {
-    type: MoodType;
-    score: number;
-  };
+  mood: MoodType;
+  moodScore: number;
+  createdAt: string;
+  updatedAt: string;
   tags: string[];
-  aiAnalysis?: {
-    sentimentScore: number;
-    detectedMood: MoodType;
-    topics: string[];
-    keywords: string[];
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  preferences: UserPreferences;
+}
+
+export interface UserPreferences {
+  theme: 'light' | 'dark' | 'system';
+  notifications: {
+    dailyReminder: boolean;
+    moodCheckIn: boolean;
+    reminderTime: 'morning' | 'afternoon' | 'evening';
+  };
+  privacy: {
+    dataCollection: boolean;
   };
 }
 
 export interface MoodData {
   date: string;
+  mood: number;
+}
+
+export interface MoodDistribution {
+  name: string;
   value: number;
-  mood: MoodType;
+}
+
+export interface Insight {
+  title: string;
+  description: string;
+}
+
+export interface AnalyticsData {
+  moodTrends: MoodData[];
+  moodDistribution: MoodDistribution[];
+  insights: Insight[];
 }

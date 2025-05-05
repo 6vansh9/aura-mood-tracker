@@ -1,233 +1,218 @@
-
 import React, { useMemo } from 'react';
 import { useJournal } from '@/contexts/JournalContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { format, subDays, differenceInDays, parseISO } from 'date-fns';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { MoodType, MoodData } from '@/types';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { format, subDays, parseISO } from 'date-fns';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { Smile, Meh, Frown, TrendingUp, Calendar, Tag } from 'lucide-react';
+import { MoodType } from '@/types';
 
-const moodEmojis = {
-  joy: "😊",
-  sadness: "😢",
-  anger: "😠",
-  fear: "😨",
-  neutral: "😐"
-};
-
-const moodColors = {
-  joy: "#FFD700",
-  sadness: "#6495ED",
-  anger: "#FF6347",
-  fear: "#9370DB",
-  neutral: "#B0C4DE"
-};
+const COLORS = ['#22c55e', '#eab308', '#ef4444'];
 
 const Analytics = () => {
-  const { entries } = useJournal();
-  
-  // Get entries from the last 30 days
+  const { entries, getMoodStats } = useJournal();
   const today = new Date();
-  const startDate = subDays(today, 30);
-  
+
   // Filter entries from the last 30 days
   const recentEntries = useMemo(() => {
-    return entries.filter(entry => {
-      const entryDate = parseISO(entry.date);
-      return entryDate >= startDate && entryDate <= today;
-    }).sort((a, b) => a.date.localeCompare(b.date));
-  }, [entries, startDate, today]);
-
-  // Prepare data for the mood chart
-  const chartData: MoodData[] = useMemo(() => {
-    // Create a complete data set for the last 30 days
-    const data: MoodData[] = [];
-    for (let i = 0; i <= 30; i++) {
-      const date = format(subDays(today, 30 - i), 'yyyy-MM-dd');
-      const entriesForDate = entries.filter(entry => entry.date === date);
-      
-      if (entriesForDate.length > 0) {
-        // If there are entries for this date, add their mood data
-        entriesForDate.forEach(entry => {
-          data.push({
-            date,
-            value: entry.mood.score,
-            mood: entry.mood.type,
-          });
-        });
-      } else {
-        // If no entries, add a placeholder
-        data.push({
-          date,
-          value: 0, // No data for this date
-          mood: 'neutral',
-        });
-      }
-    }
-    
-    return data;
+    const thirtyDaysAgo = subDays(today, 30);
+    return entries
+      .filter(entry => parseISO(entry.createdAt) >= thirtyDaysAgo)
+      .sort((a, b) => parseISO(a.createdAt).getTime() - parseISO(b.createdAt).getTime());
   }, [entries, today]);
-  
-  // Count mood frequencies
-  const moodCounts = useMemo(() => {
-    const counts: Record<MoodType, number> = {
-      joy: 0,
-      sadness: 0,
-      anger: 0,
-      fear: 0,
-      neutral: 0,
-    };
-    
+
+  // Prepare data for mood trend chart
+  const moodTrendData = useMemo(() => {
+    const dateMap = new Map();
     recentEntries.forEach(entry => {
-      counts[entry.mood.type]++;
+      dateMap.set(format(parseISO(entry.createdAt), 'yyyy-MM-dd'), entry);
     });
-    
-    return counts;
-  }, [recentEntries]);
-  
-  // Determine the dominant mood
-  const dominantMood = useMemo(() => {
-    return Object.entries(moodCounts).reduce((a, b) => a[1] > b[1] ? a : b)[0] as MoodType;
-  }, [moodCounts]);
 
-  // Calculate streaks
-  const journalStreak = useMemo(() => {
-    let streak = 0;
-    let currentDate = today;
+    return Array.from({ length: 30 }, (_, i) => {
+      const date = subDays(today, 29 - i);
+      const dateStr = format(date, 'yyyy-MM-dd');
+      const entry = dateMap.get(dateStr);
+
+      return {
+        date: dateStr,
+        moodScore: entry?.moodScore || null,
+        title: entry?.title || null,
+        mood: entry?.mood || null,
+      };
+    });
+  }, [recentEntries, today]);
+
+  // Prepare data for mood distribution chart
+  const moodDistributionData = useMemo(() => {
+    const { moodDistribution } = getMoodStats();
+    return Object.entries(moodDistribution)
+      .filter(([_, value]) => value > 0)
+      .map(([name, value]) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        value,
+      }));
+  }, [getMoodStats]);
+
+  // Calculate insights
+  const insights = useMemo(() => {
+    const { moodDistribution, averageMood } = getMoodStats();
+    const totalEntries = Object.values(moodDistribution).reduce((a, b) => a + b, 0);
     
-    while (true) {
-      const dateStr = format(currentDate, 'yyyy-MM-dd');
-      const hasEntryForDate = entries.some(entry => entry.date === dateStr);
-      
-      if (!hasEntryForDate) {
-        break;
-      }
-      
-      streak++;
-      currentDate = subDays(currentDate, 1);
-    }
-    
-    return streak;
-  }, [entries, today]);
+    const moodTrend = recentEntries.length >= 2
+      ? recentEntries[recentEntries.length - 1].moodScore - recentEntries[0].moodScore
+      : 0;
+
+    const streak = recentEntries.reduce((acc, entry, index) => {
+      if (index === 0) return 1;
+      const prevDate = parseISO(recentEntries[index - 1].createdAt);
+      const currDate = parseISO(entry.createdAt);
+      const dayDiff = Math.floor((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+      return dayDiff === 1 ? acc + 1 : acc;
+    }, 0);
+
+    return [
+      {
+        title: 'Mood Distribution',
+        description: `Your entries are ${Math.round((moodDistribution.positive / totalEntries) * 100)}% positive, ${Math.round((moodDistribution.neutral / totalEntries) * 100)}% neutral, and ${Math.round((moodDistribution.negative / totalEntries) * 100)}% negative.`,
+        icon: <Smile className="h-4 w-4" />,
+      },
+      {
+        title: 'Average Mood',
+        description: `Your average mood score is ${averageMood.toFixed(1)} out of 1.0.`,
+        icon: <TrendingUp className="h-4 w-4" />,
+      },
+      {
+        title: 'Mood Trend',
+        description: moodTrend > 0
+          ? 'Your mood has been improving over the last 30 days.'
+          : moodTrend < 0
+          ? 'Your mood has been declining over the last 30 days.'
+          : 'Your mood has been stable over the last 30 days.',
+        icon: <TrendingUp className="h-4 w-4" />,
+      },
+      {
+        title: 'Journaling Streak',
+        description: `You've journaled for ${streak} consecutive days.`,
+        icon: <Calendar className="h-4 w-4" />,
+      },
+      {
+        title: 'Most Common Tags',
+        description: `Your most used tags are: ${Array.from(new Set(recentEntries.flatMap(entry => entry.tags)))
+          .slice(0, 3)
+          .join(', ')}`,
+        icon: <Tag className="h-4 w-4" />,
+      },
+    ];
+  }, [recentEntries, getMoodStats]);
 
   return (
-    <div className="container max-w-4xl py-6 px-4 md:px-6 space-y-6">
-      <h1 className="text-3xl font-bold tracking-tight">Mood Analytics</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Journal Streak</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center h-24">
-              <p className="text-4xl font-bold">{journalStreak}</p>
-              <p className="text-sm text-muted-foreground">days in a row</p>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Entries This Month</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center h-24">
-              <p className="text-4xl font-bold">{recentEntries.length}</p>
-              <p className="text-sm text-muted-foreground">in the last 30 days</p>
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="shadow-md">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Dominant Mood</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col items-center justify-center h-24">
-              <div className="text-4xl mb-1">{moodEmojis[dominantMood]}</div>
-              <p className="text-lg font-bold capitalize">{dominantMood}</p>
-            </div>
-          </CardContent>
-        </Card>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-bold">Analytics</h1>
       </div>
-      
-      <Card className="shadow-md">
-        <CardHeader>
-          <CardTitle>Mood Trends (30 Days)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart
-                data={chartData}
-                margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
-                <XAxis 
-                  dataKey="date" 
-                  tickFormatter={(date) => format(parseISO(date), 'MMM d')}
-                  tick={{ fontSize: 12 }}
-                  interval={5}
-                />
-                <YAxis domain={[0, 1]} tick={{ fontSize: 12 }} />
-                <Tooltip
-                  formatter={(value, name, props) => [
-                    `Intensity: ${Math.round(Number(value) * 100)}%`,
-                    `Mood: ${props.payload.mood}`
-                  ]}
-                  labelFormatter={(label) => format(parseISO(label), 'MMMM d, yyyy')}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="value"
-                  stroke="#8884d8"
-                  strokeWidth={2}
-                  dot={(props) => {
-                    const { cx, cy, payload } = props;
-                    return payload.value > 0 ? (
-                      <circle 
-                        cx={cx} 
-                        cy={cy} 
-                        r={5} 
-                        fill={moodColors[payload.mood]} 
-                        stroke="none" 
-                      />
-                    ) : null;
-                  }}
-                  activeDot={{ r: 8, strokeWidth: 2 }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </CardContent>
-      </Card>
-      
-      <Card className="shadow-md">
-        <CardHeader>
-          <CardTitle>Mood Distribution</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-5 gap-2">
-            {Object.entries(moodCounts).map(([mood, count]) => (
-              <div key={mood} className="flex flex-col items-center">
-                <div className="text-2xl mb-2">{moodEmojis[mood as MoodType]}</div>
-                <div className="h-24 w-full bg-muted rounded-md relative">
-                  <div 
-                    className="absolute bottom-0 w-full rounded-md"
-                    style={{ 
-                      height: `${(count / recentEntries.length) * 100}%`,
-                      backgroundColor: moodColors[mood as MoodType],
-                      minHeight: '1px'
-                    }}
-                  ></div>
-                </div>
-                <p className="mt-2 font-medium">{count}</p>
-                <p className="text-xs text-muted-foreground capitalize">{mood}</p>
+
+      <Tabs defaultValue="trends" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="trends">Mood Trends</TabsTrigger>
+          <TabsTrigger value="distribution">Mood Distribution</TabsTrigger>
+          <TabsTrigger value="insights">Insights</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="trends">
+          <Card>
+            <CardHeader>
+              <CardTitle>Mood Trend (Last 30 Days)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[400px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={moodTrendData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={(date) => format(parseISO(date), 'MMM d')}
+                    />
+                    <YAxis domain={[0, 1]} />
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div className="bg-background border rounded-lg p-2 shadow-lg">
+                              <p className="font-medium">{format(parseISO(data.date), 'MMMM d, yyyy')}</p>
+                              {data.title && <p className="text-sm text-muted-foreground">{data.title}</p>}
+                              <p className="text-sm">
+                                Mood Score: {data.moodScore?.toFixed(2) || 'No entry'}
+                              </p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="moodScore"
+                      stroke="#8884d8"
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 6 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="distribution">
+          <Card>
+            <CardHeader>
+              <CardTitle>Mood Distribution</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[400px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={moodDistributionData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={150}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {moodDistributionData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="insights">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {insights.map((insight, index) => (
+              <Card key={index}>
+                <CardHeader>
+                  <div className="flex items-center space-x-2">
+                    {insight.icon}
+                    <CardTitle className="text-lg">{insight.title}</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">{insight.description}</p>
+                </CardContent>
+              </Card>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

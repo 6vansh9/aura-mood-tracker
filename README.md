@@ -1,73 +1,61 @@
-# Welcome to your Lovable project
+# Aura - Smart Journal & Mood Analyzer
 
-## Project info
+Aura is an intelligent journaling application that combines traditional journaling with AI-powered mood analysis. Track your emotions, gain insights, and improve your mental well-being through data-driven self-reflection.
 
-**URL**: https://lovable.dev/projects/1b2f0a24-a3df-435f-97e2-194f75e5cefe
+## Features
 
-## How can I edit this code?
+- 📝 Rich text journaling with media support
+- 🧠 AI-powered sentiment analysis
+- 📊 Interactive mood analytics and trends
+- 🎯 Personalized insights and recommendations
+- 🔒 Secure and private data storage
+- 📱 Cross-platform support (Web, iOS, Android)
 
-There are several ways of editing your application.
+## Tech Stack
 
-**Use Lovable**
+- Frontend: React with TypeScript
+- UI Components: Radix UI + Tailwind CSS
+- State Management: React Query + Context API
+- Charts: Recharts
+- Backend: Node.js + Express (coming soon)
+- Database: MongoDB (coming soon)
+- AI: TensorFlow.js (coming soon)
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/1b2f0a24-a3df-435f-97e2-194f75e5cefe) and start prompting.
+## Getting Started
 
-Changes made via Lovable will be committed automatically to this repo.
+1. Clone the repository
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Start the development server:
+   ```bash
+   npm run dev
+   ```
+4. Open [http://localhost:5173](http://localhost:5173) in your browser
 
-**Use your preferred IDE**
+## Project Structure
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```
+src/
+├── components/     # Reusable UI components
+├── features/       # Feature-specific components and logic
+├── hooks/         # Custom React hooks
+├── lib/           # Utility functions and configurations
+├── pages/         # Page components
+├── services/      # API and external service integrations
+├── store/         # State management
+└── types/         # TypeScript type definitions
 ```
 
-**Edit a file directly in GitHub**
+## Contributing
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-**Use GitHub Codespaces**
+## License
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/1b2f0a24-a3df-435f-97e2-194f75e5cefe) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+This project is licensed under the MIT License - see the LICENSE file for details.

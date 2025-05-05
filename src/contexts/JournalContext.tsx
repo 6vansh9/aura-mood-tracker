@@ -1,33 +1,156 @@
-
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { JournalEntry, MoodType } from '@/types';
 import { toast } from '@/components/ui/use-toast';
 
-type JournalContextType = {
+interface JournalContextType {
   entries: JournalEntry[];
-  addEntry: (entry: Omit<JournalEntry, 'id'>) => void;
+  addEntry: (entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateEntry: (id: string, entry: Partial<JournalEntry>) => void;
   deleteEntry: (id: string) => void;
-  getEntryById: (id: string) => JournalEntry | undefined;
-  getEntriesByDate: (date: string) => JournalEntry[];
-  analyzeText: (text: string) => Promise<{ 
-    mood: MoodType; 
-    score: number; 
-    sentimentScore: number;
-    topics: string[];
-    keywords: string[];
-  }>;
-};
+  getEntry: (id: string) => JournalEntry | undefined;
+  getRecentEntries: (limit?: number) => JournalEntry[];
+  getMoodStats: () => {
+    averageMood: number;
+    moodDistribution: Record<MoodType, number>;
+    streak: number;
+  };
+}
 
 const JournalContext = createContext<JournalContextType | undefined>(undefined);
 
-export const useJournal = () => {
+export function JournalProvider({ children }: { children: ReactNode }) {
+  const [entries, setEntries] = useState<JournalEntry[]>(() => {
+    const savedEntries = localStorage.getItem('journal_entries');
+    return savedEntries ? JSON.parse(savedEntries) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('journal_entries', JSON.stringify(entries));
+  }, [entries]);
+
+  const addEntry = (entry: Omit<JournalEntry, 'id' | 'createdAt' | 'updatedAt'>) => {
+    const newEntry: JournalEntry = {
+      ...entry,
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setEntries((prev) => [...prev, newEntry]);
+    toast({
+      title: "Journal Entry Saved",
+      description: "Your thoughts have been captured successfully.",
+    });
+  };
+
+  const updateEntry = (id: string, entry: Partial<JournalEntry>) => {
+    setEntries((prev) =>
+      prev.map((e) =>
+        e.id === id
+          ? { ...e, ...entry, updatedAt: new Date().toISOString() }
+          : e
+      )
+    );
+    toast({
+      title: "Journal Entry Updated",
+      description: "Your changes have been saved.",
+    });
+  };
+
+  const deleteEntry = (id: string) => {
+    setEntries((prev) => prev.filter((e) => e.id !== id));
+    toast({
+      title: "Journal Entry Deleted",
+      description: "The entry has been removed from your journal.",
+    });
+  };
+
+  const getEntry = (id: string) => {
+    return entries.find((e) => e.id === id);
+  };
+
+  const getRecentEntries = (limit = 5) => {
+    return [...entries]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
+  };
+
+  const getMoodStats = () => {
+    if (entries.length === 0) {
+      return {
+        averageMood: 0,
+        moodDistribution: {
+          positive: 0,
+          neutral: 0,
+          negative: 0,
+        },
+        streak: 0,
+      };
+    }
+
+    const moodValues = {
+      positive: 5,
+      neutral: 3,
+      negative: 1,
+    };
+
+    const averageMood =
+      entries.reduce((sum, entry) => sum + moodValues[entry.mood], 0) / entries.length;
+
+    const moodDistribution = entries.reduce(
+      (acc, entry) => {
+        acc[entry.mood]++;
+        return acc;
+      },
+      { positive: 0, neutral: 0, negative: 0 } as Record<MoodType, number>
+    );
+
+    // Calculate streak
+    let streak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    for (let i = 0; i < entries.length; i++) {
+      const entryDate = new Date(entries[i].createdAt);
+      entryDate.setHours(0, 0, 0, 0);
+
+      if (entryDate.getTime() === today.getTime() - i * 24 * 60 * 60 * 1000) {
+        streak++;
+      } else {
+        break;
+      }
+    }
+
+    return {
+      averageMood,
+      moodDistribution,
+      streak,
+    };
+  };
+
+  const value: JournalContextType = {
+    entries,
+    addEntry,
+    updateEntry,
+    deleteEntry,
+    getEntry,
+    getRecentEntries,
+    getMoodStats,
+  };
+
+  return (
+    <JournalContext.Provider value={value}>
+      {children}
+    </JournalContext.Provider>
+  );
+}
+
+export function useJournal() {
   const context = useContext(JournalContext);
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useJournal must be used within a JournalProvider');
   }
   return context;
-};
+}
 
 // Enhanced sentiment analysis function
 const analyzeSentiment = async (text: string): Promise<{ 
@@ -152,92 +275,4 @@ const extractKeywords = (text: string): string[] => {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([word]) => word);
-};
-
-export const JournalProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [entries, setEntries] = useState<JournalEntry[]>(() => {
-    const savedEntries = localStorage.getItem('journal_entries');
-    return savedEntries ? JSON.parse(savedEntries) : [];
-  });
-
-  useEffect(() => {
-    localStorage.setItem('journal_entries', JSON.stringify(entries));
-  }, [entries]);
-
-  const addEntry = (entry: Omit<JournalEntry, 'id'>) => {
-    const id = Date.now().toString();
-    setEntries(prev => [{ ...entry, id }, ...prev]);
-    toast({
-      title: "Journal Entry Saved",
-      description: "Your thoughts have been captured successfully.",
-    });
-  };
-
-  const updateEntry = (id: string, entryUpdate: Partial<JournalEntry>) => {
-    setEntries(prev => prev.map(entry => 
-      entry.id === id ? { ...entry, ...entryUpdate } : entry
-    ));
-    toast({
-      title: "Journal Entry Updated",
-      description: "Your changes have been saved.",
-    });
-  };
-
-  const deleteEntry = (id: string) => {
-    setEntries(prev => prev.filter(entry => entry.id !== id));
-    toast({
-      title: "Journal Entry Deleted",
-      description: "The entry has been removed from your journal.",
-    });
-  };
-
-  const getEntryById = (id: string) => {
-    return entries.find(entry => entry.id === id);
-  };
-
-  const getEntriesByDate = (date: string) => {
-    return entries.filter(entry => entry.date.startsWith(date));
-  };
-
-  const analyzeText = async (text: string): Promise<{ 
-    mood: MoodType; 
-    score: number;
-    sentimentScore: number;
-    topics: string[];
-    keywords: string[];
-  }> => {
-    try {
-      return await analyzeSentiment(text);
-    } catch (error) {
-      console.error('Error analyzing text:', error);
-      toast({
-        title: "Analysis Error",
-        description: "Could not analyze your text. Using neutral sentiment instead.",
-        variant: "destructive",
-      });
-      return { 
-        mood: 'neutral' as MoodType, 
-        score: 0.5,
-        sentimentScore: 0.5,
-        topics: ['general'],
-        keywords: []
-      };
-    }
-  };
-
-  const value: JournalContextType = {
-    entries,
-    addEntry,
-    updateEntry,
-    deleteEntry,
-    getEntryById,
-    getEntriesByDate,
-    analyzeText,
-  };
-
-  return (
-    <JournalContext.Provider value={value}>
-      {children}
-    </JournalContext.Provider>
-  );
 };
